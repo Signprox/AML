@@ -1,3 +1,4 @@
+ecs-logging
 fastapi
 pydantic-settings
 uvicorn[standard]
