@@ -240,9 +240,22 @@ Successful response:
 
 ```json
 {
-  "status": "healthy"
+  "success": true,
+  "message": "Service is healthy",
+  "data": {
+    "status": "healthy"
+  },
+  "error": null,
+  "meta": {
+    "request_id": "7c8e12b42fc94fb397ea165bd5c28aac"
+  }
 }
 ```
+
+All application endpoints use this response envelope. Error responses set
+`success` to `false`, set `data` to `null`, and provide a stable machine-readable
+`error.code` with safe validation details. Meaningful HTTP status codes are
+preserved. Swagger UI, ReDoc, and the OpenAPI document retain their native formats.
 
 The endpoint returns HTTP `200` when the application process is available. It currently does not check a database or external dependency because those integrations have not been implemented.
 

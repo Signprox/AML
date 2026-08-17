@@ -1,9 +1,13 @@
 import logging
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from starlette.responses import JSONResponse
 
+from app.api.helpers import success_response
+from app.api.schemas import ApiResponse
 from app.core.config import get_settings
+from app.core.handlers import register_exception_handlers
 from app.core.logging import configure_logging
 from app.core.middleware import RequestLoggingMiddleware, SecurityHeadersMiddleware
 
@@ -40,8 +44,13 @@ app.add_middleware(
     hsts_enabled=settings.hsts_enabled,
     hsts_max_age=settings.hsts_max_age,
 )
+register_exception_handlers(app)
 
 
-@app.get("/health", tags=["Health"])
-def health_check() -> dict[str, str]:
-    return {"status": "healthy"}
+@app.get("/health", tags=["Health"], response_model=ApiResponse[dict[str, str]])
+def health_check(request: Request) -> JSONResponse:
+    return success_response(
+        request,
+        data={"status": "healthy"},
+        message="Service is healthy",
+    )
