@@ -59,10 +59,11 @@ Location: `app/infrastructure/`
 
 Contains technical adapters for interfaces defined by the application layer.
 
-- `database/`: database sessions, ORM models, and persistence configuration
+- `database/`: async database sessions, ORM base metadata, and persistence configuration
 - `repositories/`: concrete repository implementations
 
-Database and repository implementations are currently placeholders.
+The async PostgreSQL session foundation is implemented. ORM models and repository
+implementations remain placeholders.
 
 ### API layer
 
@@ -133,6 +134,8 @@ Runtime packages are declared in `requirements.txt`:
 - `uvicorn[standard]`: ASGI development/runtime server
 - `pydantic-settings`: typed environment configuration
 - `ecs-logging`: Elastic Common Schema JSON formatter
+- `SQLAlchemy`: asynchronous ORM and database session management
+- `asyncpg`: asynchronous PostgreSQL driver
 
 ## Local setup
 
@@ -213,6 +216,11 @@ This allows deployment platforms to override tracked defaults without modifying 
 | `SECURITY_HEADERS_ENABLED` | `true` or `false` | Enables the security-header middleware |
 | `HSTS_ENABLED` | `true` or `false` | Enables HTTP Strict Transport Security |
 | `HSTS_MAX_AGE` | Non-negative integer | Sets the HSTS lifetime in seconds |
+| `DB_HOST` | Non-empty hostname | PostgreSQL server hostname |
+| `DB_PORT` | `1`–`65535`; defaults to `5432` | PostgreSQL server port |
+| `DB_NAME` | Non-empty string | PostgreSQL database name |
+| `DB_USER` | Non-empty string | PostgreSQL username |
+| `DB_PASSWORD` | Required secret | PostgreSQL password supplied at runtime |
 
 Current defaults:
 
@@ -225,6 +233,9 @@ Current defaults:
 ### Configuration safety
 
 The tracked files contain non-secret defaults only. Do not commit passwords, database credentials, tokens, private keys, or third-party API secrets. Supply secrets using deployment environment variables or an approved secret manager.
+
+`Settings` constructs the encoded `postgresql+asyncpg` connection URL from the
+separate database fields. The completed URL and password must never be logged.
 
 HSTS must only be enabled when the environment is served exclusively over HTTPS. Browsers cache HSTS instructions, so it is intentionally disabled for local HTTP development.
 
@@ -446,6 +457,7 @@ Implemented:
 - Request timing and correlation IDs
 - Defensive response security headers
 - Health endpoint and API documentation
+- Async PostgreSQL engine, session lifecycle, and ORM metadata foundation
 
 Not yet implemented:
 
@@ -453,7 +465,6 @@ Not yet implemented:
 - Customer KYC workflows
 - System-user CRUD or deactivation
 - Authentication, roles, and permissions
-- PostgreSQL and SQLAlchemy integration
 - Alembic migration configuration
 - Audit-event persistence
 - Sanctions or third-party API clients

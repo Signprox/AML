@@ -2,8 +2,9 @@ import os
 from functools import lru_cache
 from pathlib import Path
 from typing import Literal
+from urllib.parse import quote
 
-from pydantic import Field, field_validator
+from pydantic import Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -23,6 +24,11 @@ class Settings(BaseSettings):
     security_headers_enabled: bool
     hsts_enabled: bool
     hsts_max_age: int = Field(ge=0)
+    db_host: str
+    db_port: int = Field(default=5432, ge=1, le=65535)
+    db_name: str
+    db_user: str
+    db_password: SecretStr
 
     model_config = SettingsConfigDict(
         env_file_encoding="utf-8",
@@ -33,6 +39,29 @@ class Settings(BaseSettings):
     @classmethod
     def normalize_log_level(cls, value: object) -> object:
         return value.upper() if isinstance(value, str) else value
+
+    @field_validator("db_host", "db_name", "db_user", mode="before")
+    @classmethod
+    def validate_database_text(cls, value: object) -> object:
+        if isinstance(value, str):
+            value = value.strip()
+            if not value:
+                raise ValueError("Database configuration value must not be empty")
+        return value
+
+    @property
+    def database_url(self) -> str:
+        username = quote(self.db_user, safe="")
+        password = quote(self.db_password.get_secret_value(), safe="")
+        database = quote(self.db_name, safe="")
+        host = self.db_host
+
+        if ":" in host and not host.startswith("["):
+            host = f"[{host}]"
+        return (
+            f"postgresql+asyncpg://{username}:{password}"
+            f"@{host}:{self.db_port}/{database}"
+        )
 
 
 def _get_active_environment() -> str:

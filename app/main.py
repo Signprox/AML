@@ -10,6 +10,7 @@ from app.core.config import get_settings
 from app.core.handlers import register_exception_handlers
 from app.core.logging import configure_logging
 from app.core.middleware import RequestLoggingMiddleware, SecurityHeadersMiddleware
+from app.infrastructure.database import configure_database, dispose_database
 
 
 settings = get_settings()
@@ -19,15 +20,19 @@ logger = logging.getLogger("aml.application")
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
+    configure_database(settings)
     logger.info(
         "Application started",
         extra={"event": {"action": "start", "dataset": "aml.application"}},
     )
-    yield
-    logger.info(
-        "Application stopped",
-        extra={"event": {"action": "stop", "dataset": "aml.application"}},
-    )
+    try:
+        yield
+    finally:
+        await dispose_database()
+        logger.info(
+            "Application stopped",
+            extra={"event": {"action": "stop", "dataset": "aml.application"}},
+        )
 
 
 app = FastAPI(
