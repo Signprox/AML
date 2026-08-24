@@ -2,6 +2,9 @@
 
 FastAPI foundation for an Anti-Money Laundering (AML) backend, organized with Clean Architecture and Domain-Driven Design (DDD) boundaries.
 
+For a class-by-class explanation and end-to-end request flows, see
+[`ARCHITECTURE_GUIDE.md`](ARCHITECTURE_GUIDE.md).
+
 The repository currently provides the application scaffold and cross-cutting platform concerns: environment-aware configuration, Elastic Common Schema (ECS) logging, request correlation, security response headers, health monitoring, and interactive API documentation. AML business workflows, persistence models, database migrations, authentication, and external integrations are intentionally not implemented yet.
 
 ## Contents
@@ -167,11 +170,19 @@ The `.venv/` directory is excluded from Git.
 
 ## Running the application
 
-Development is the default environment:
+Use the environment-aware runner from the repository root:
 
 ```powershell
-.\.venv\Scripts\python.exe -m uvicorn app.main:app --reload
+.\.venv\Scripts\python.exe run.py development
+.\.venv\Scripts\python.exe run.py uat
+.\.venv\Scripts\python.exe run.py production
 ```
+
+The argument is required and must be `development`, `uat`, or `production`.
+The runner sets `APP_ENV` before loading the application, binds to
+`127.0.0.1:8000`, and enables source reload. Ensure all required settings,
+including the database password, are available in the selected environment file
+or process environment before startup.
 
 The service is available at:
 
@@ -181,7 +192,7 @@ The service is available at:
 - ReDoc: `http://127.0.0.1:8000/redoc`
 - OpenAPI schema: `http://127.0.0.1:8000/openapi.json`
 
-Select another environment before starting the server:
+You can still run Uvicorn directly when deployment tooling manages `APP_ENV`:
 
 ```powershell
 $env:APP_ENV = "uat"
@@ -195,6 +206,9 @@ To remove the selector and return to the development default:
 ```powershell
 Remove-Item Env:APP_ENV
 ```
+
+`python run:development` is not supported because Python interprets
+`run:development` as a filename. Use `python run.py development` instead.
 
 ## Configuration
 
@@ -240,6 +254,14 @@ separate database fields. The completed URL and password must never be logged.
 HSTS must only be enabled when the environment is served exclusively over HTTPS. Browsers cache HSTS instructions, so it is intentionally disabled for local HTTP development.
 
 ## API endpoints
+
+### Users
+
+- `POST /api/v1/users/createUser` and `POST /api/v2/users` create an active, unverified user. The supplied password is
+  hashed with Argon2 and is never returned or logged. Public registration always
+  assigns the `user` role.
+- `GET /api/v1/users/getUser/{user_id}` and `GET /api/v2/users/{user_id}` retrieve a user by UUID without exposing the password
+  hash.
 
 ### Health check
 

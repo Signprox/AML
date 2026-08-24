@@ -2,10 +2,10 @@ import logging
 
 import pytest
 from pydantic import ValidationError
-from sqlalchemy import Column, Integer, Table, UniqueConstraint
+from sqlalchemy import Column, Integer, Table, UniqueConstraint, select
 
 from app.core.config import Settings
-from app.infrastructure.database import Base
+from app.infrastructure.database import Base, DatabaseHelper
 from app.infrastructure.database import session as database_session
 
 
@@ -176,3 +176,124 @@ def test_configure_database_is_idempotent(monkeypatch) -> None:
     database_session.configure_database(settings)
 
     assert calls == 1
+
+
+class FakeTransaction:
+    def __init__(self, session) -> None:
+        self.session = session
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, exception_type, *_args):
+        if exception_type is None:
+            self.session.commits += 1
+        else:
+            self.session.transaction_rollbacks += 1
+
+
+class HelperSession:
+    def __init__(self) -> None:
+        self.executions = []
+        self.result = object()
+        self.commits = 0
+        self.transaction_rollbacks = 0
+        self.flushes = 0
+        self.rollbacks = 0
+
+    async def execute(self, statement, parameters=None):
+        self.executions.append((statement, parameters))
+        return self.result
+
+    def begin(self):
+        return FakeTransaction(self)
+
+    async def flush(self, _objects=None):
+        self.flushes += 1
+
+    async def commit(self):
+        self.commits += 1
+
+    async def rollback(self):
+        self.rollbacks += 1
+
+
+@pytest.mark.asyncio
+async def test_database_helper_executes_statement_without_committing() -> None:
+    session = HelperSession()
+    helper = DatabaseHelper(session)
+    statement = select(1)
+
+    result = await helper.execute(statement, {"value": 1})
+
+    assert result is session.result
+    assert session.executions == [(statement, {"value": 1})]
+    assert session.commits == 0
+
+
+@pytest.mark.asyncio
+async def test_database_helper_executes_parameterized_raw_query() -> None:
+    session = HelperSession()
+    helper = DatabaseHelper(session)
+
+    await helper.execute_raw(
+        "SELECT id FROM sm_user_t WHERE email=:email",
+        {"email": "safe@example.com"},
+    )
+
+    statement, parameters = session.executions[0]
+    assert str(statement) == "SELECT id FROM sm_user_t WHERE email=:email"
+    assert parameters == {"email": "safe@example.com"}
+
+
+@pytest.mark.asyncio
+async def test_database_helper_rejects_empty_raw_query() -> None:
+    helper = DatabaseHelper(HelperSession())
+
+    with pytest.raises(ValueError, match="must not be empty"):
+        await helper.execute_raw("   ")
+
+
+@pytest.mark.asyncio
+async def test_database_helper_transaction_commits_or_rolls_back() -> None:
+    session = HelperSession()
+    helper = DatabaseHelper(session)
+
+    async with helper.transaction():
+        pass
+    assert session.commits == 1
+
+    with pytest.raises(RuntimeError, match="failure"):
+        async with helper.transaction():
+            raise RuntimeError("failure")
+    assert session.transaction_rollbacks == 1
+
+
+@pytest.mark.asyncio
+async def test_database_helper_flush_commit_and_rollback_are_explicit() -> None:
+    session = HelperSession()
+    helper = DatabaseHelper(session)
+
+    await helper.flush()
+    await helper.commit()
+    await helper.rollback()
+
+    assert session.flushes == 1
+    assert session.commits == 1
+    assert session.rollbacks == 1
+
+
+@pytest.mark.asyncio
+async def test_database_helper_logs_do_not_contain_query_or_parameters(caplog) -> None:
+    helper = DatabaseHelper(HelperSession())
+    query = "SELECT id FROM sm_user_t WHERE email=:email"
+    secret_parameter = "must-not-appear@example.com"
+
+    with caplog.at_level(logging.INFO, logger="aml.database"):
+        await helper.execute_raw(query, {"email": secret_parameter})
+
+    assert query not in caplog.text
+    assert secret_parameter not in caplog.text
+    assert any(
+        record.event["action"] == "database.execute_raw" for record in caplog.records
+    )

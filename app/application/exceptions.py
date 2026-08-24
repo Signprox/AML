@@ -2,7 +2,6 @@ from typing import Any
 
 
 class ApplicationError(Exception):
-    """A safe, expected application failure that can be shown to API clients."""
 
     code = "APPLICATION_ERROR"
 
@@ -31,3 +30,7 @@ class NotFoundError(ApplicationError):
 
 class ConflictError(ApplicationError):
     code = "CONFLICT"
+
+
+class UserAlreadyExistsError(ConflictError):
+    code = "USER_ALREADY_EXISTS"

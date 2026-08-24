@@ -6,6 +6,8 @@ from starlette.responses import JSONResponse
 
 from app.api.helpers import success_response
 from app.api.schemas import ApiResponse
+from app.api.v1 import router as v1_router
+from app.api.v2 import router as v2_router
 from app.core.config import get_settings
 from app.core.handlers import register_exception_handlers
 from app.core.logging import configure_logging
@@ -50,6 +52,8 @@ app.add_middleware(
     hsts_max_age=settings.hsts_max_age,
 )
 register_exception_handlers(app)
+app.include_router(v1_router)
+app.include_router(v2_router)
 
 
 @app.get("/health", tags=["Health"], response_model=ApiResponse[dict[str, str]])
