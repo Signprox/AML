@@ -3,6 +3,7 @@ from collections.abc import AsyncIterator
 from threading import Lock
 from time import perf_counter_ns
 
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
@@ -12,14 +13,13 @@ from sqlalchemy.ext.asyncio import (
 
 from app.core.config import Settings
 
-
 logger = logging.getLogger("aml.database")
 _configuration_lock = Lock()
 _engine: AsyncEngine | None = None
 _session_factory: async_sessionmaker[AsyncSession] | None = None
 
 
-def _event(action: str, outcome: str, duration_ns: int | None = None) -> dict:
+def _event(action: str, outcome: str, duration_ns: int | None = None) -> dict[str, str | int | dict[str, str | int]]:
     event: dict[str, str | int] = {
         "action": action,
         "dataset": "aml.database",
@@ -42,6 +42,9 @@ def configure_database(settings: Settings) -> None:
             engine = create_async_engine(
                 settings.database_url,
                 pool_pre_ping=True,
+                pool_size=settings.db_pool_size,
+                max_overflow=settings.db_max_overflow,
+                pool_timeout=settings.db_pool_timeout,
                 echo=False,
             )
             session_factory = async_sessionmaker(
@@ -135,6 +138,18 @@ async def get_session() -> AsyncIterator[AsyncSession]:
                     perf_counter_ns() - started_at,
                 ),
             )
+
+
+async def check_database_connection() -> bool:
+    engine = _engine
+    if engine is None:
+        return False
+    try:
+        async with engine.connect() as connection:
+            await connection.execute(text("SELECT 1"))
+        return True
+    except Exception:
+        return False
 
 
 async def dispose_database() -> None:

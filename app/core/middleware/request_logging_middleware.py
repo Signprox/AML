@@ -9,7 +9,6 @@ from starlette.responses import Response
 
 from app.core.config import REQUEST_ID_HEADER
 
-
 logger = logging.getLogger("aml.http")
 _REQUEST_ID_PATTERN = re.compile(r"^[A-Za-z0-9._:-]{1,128}$")
 

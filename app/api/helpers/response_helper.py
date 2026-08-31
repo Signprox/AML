@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, cast
 
 from fastapi import Request, status
 from fastapi.encoders import jsonable_encoder
@@ -26,7 +26,7 @@ def _content(response: ApiResponse[Any]) -> dict[str, Any]:
     content = jsonable_encoder(response, exclude_none=False)
     if response.meta.pagination is None:
         content["meta"].pop("pagination", None)
-    return content
+    return cast(dict[str, Any], content)
 
 
 def success_response(

@@ -23,6 +23,15 @@ def make_settings(**overrides) -> Settings:
         "db_name": "aml",
         "db_user": "aml",
         "db_password": "safe-password",
+        "db_pool_size": 5,
+        "db_max_overflow": 10,
+        "db_pool_timeout": 30,
+        "jwt_secret": "test-secret",
+        "jwt_algorithm": "HS256",
+        "jwt_expire_minutes": 60,
+        "cors_origins": "",
+        "trusted_hosts": "",
+        "rate_limit": "100/minute",
     }
     values.update(overrides)
     return Settings(**values)
@@ -200,10 +209,15 @@ class HelperSession:
         self.transaction_rollbacks = 0
         self.flushes = 0
         self.rollbacks = 0
+        self.merges = []
 
     async def execute(self, statement, parameters=None):
         self.executions.append((statement, parameters))
         return self.result
+
+    async def merge(self, instance):
+        self.merges.append(instance)
+        return instance
 
     def begin(self):
         return FakeTransaction(self)
@@ -281,6 +295,20 @@ async def test_database_helper_flush_commit_and_rollback_are_explicit() -> None:
     assert session.flushes == 1
     assert session.commits == 1
     assert session.rollbacks == 1
+
+
+@pytest.mark.asyncio
+async def test_database_helper_update_merges_and_flushes_without_committing() -> None:
+    session = HelperSession()
+    helper = DatabaseHelper(session)
+    model = object()
+
+    result = await helper.update(model)
+
+    assert result is model
+    assert session.merges == [model]
+    assert session.flushes == 1
+    assert session.commits == 0
 
 
 @pytest.mark.asyncio

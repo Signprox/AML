@@ -11,9 +11,9 @@ from app.application.exceptions import (
     AuthorizationError,
     ConflictError,
 )
+from app.core.config import ApiErrorCode
 from app.core.handlers import register_exception_handlers
 from app.core.middleware import RequestLoggingMiddleware, SecurityHeadersMiddleware
-from app.core.config import ApiErrorCode
 
 
 class ExampleInput(BaseModel):

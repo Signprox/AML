@@ -21,6 +21,29 @@ class CreateUserRequest(BaseModel):
         normalized = value.strip()
         return normalized or None
 
+    @field_validator("password")
+    @classmethod
+    def validate_password_complexity(cls, value: str) -> str:
+        import re
+
+        if not re.match(r"^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).+$", value):
+            raise ValueError(
+                "Password must contain uppercase, lowercase, digit, and special character"
+            )
+        return value
+
+
+class LoginRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    username: str = Field(min_length=3, max_length=50)
+    password: str = Field(min_length=8, max_length=128)
+
+
+class LoginResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+
 
 class UserResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)

@@ -1,6 +1,5 @@
 from enum import StrEnum
 
-
 REQUEST_ID_HEADER = "X-Request-ID"
 UNKNOWN_REQUEST_ID = "unknown"
 

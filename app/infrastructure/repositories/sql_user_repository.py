@@ -4,7 +4,8 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.application.exceptions import UserAlreadyExistsError
+from app.application.exceptions import NotFoundError, UserAlreadyExistsError
+from app.application.interfaces import UserRepository
 from app.domain.entities import User
 from app.infrastructure.database import DatabaseHelper
 from app.infrastructure.database.models import UserModel
@@ -24,6 +25,18 @@ def _to_domain(model: UserModel) -> User:
         created_at=model.created_at,
         updated_at=model.updated_at,
     )
+
+
+def _apply_domain_to_model(user: User, model: UserModel) -> None:
+    model.username = user.username
+    model.email = user.email
+    model.password_hash = user.password_hash
+    model.first_name = user.first_name
+    model.last_name = user.last_name
+    model.is_active = user.is_active
+    model.is_verified = user.is_verified
+    model.role = user.role
+    model.updated_at = user.updated_at
 
 
 class SqlUserRepository:
@@ -73,12 +86,27 @@ class SqlUserRepository:
             raise UserAlreadyExistsError("Username or email is already registered") from exc
         return _to_domain(model)
 
+    async def update(self, user: User) -> User:
+        result = await self._database.execute(
+            select(UserModel).where(UserModel.id == user.id)
+        )
+        model = result.scalar_one_or_none()
+        if model is None:
+            raise NotFoundError("User not found")
+
+        _apply_domain_to_model(user, model)
+        try:
+            updated_model = await self._database.update(model)
+        except IntegrityError as exc:
+            raise UserAlreadyExistsError("Username or email is already registered") from exc
+        return _to_domain(updated_model)
+
 
 class SqlAlchemyUserUnitOfWork:
     def __init__(self, session: AsyncSession):
         self._session = session
         self._database = DatabaseHelper(session)
-        self.users = SqlUserRepository(session)
+        self.users: UserRepository = SqlUserRepository(session)
 
     async def commit(self) -> None:
         await self._database.commit()

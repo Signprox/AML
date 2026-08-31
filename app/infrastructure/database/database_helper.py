@@ -8,7 +8,6 @@ from sqlalchemy import Executable, text
 from sqlalchemy.engine import Result
 from sqlalchemy.ext.asyncio import AsyncSession
 
-
 logger = logging.getLogger("aml.database")
 
 
@@ -53,6 +52,33 @@ class DatabaseHelper:
             "database.flush",
             lambda: self._session.flush(objects),
         )
+
+    async def update(self, instance: Any) -> Any:
+        """Merge ORM changes and flush without committing the transaction."""
+        started_at = perf_counter_ns()
+        try:
+            merged = await self._session.merge(instance)
+            await self._session.flush()
+        except Exception as exc:
+            logger.error(
+                "Database session operation failed",
+                extra=self._log_fields(
+                    action="database.update",
+                    outcome="failure",
+                    started_at=started_at,
+                    error_type=type(exc).__name__,
+                ),
+            )
+            raise
+        logger.info(
+            "Database session operation completed",
+            extra=self._log_fields(
+                action="database.update",
+                outcome="success",
+                started_at=started_at,
+            ),
+        )
+        return merged
 
     async def commit(self) -> None:
         """Commit the current transaction with sanitized telemetry."""

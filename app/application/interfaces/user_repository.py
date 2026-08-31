@@ -13,6 +13,8 @@ class UserRepository(Protocol):
 
     async def add(self, user: User) -> User: ...
 
+    async def update(self, user: User) -> User: ...
+
 
 class UserUnitOfWork(Protocol):
     users: UserRepository

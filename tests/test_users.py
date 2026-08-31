@@ -1,69 +1,38 @@
-from datetime import UTC, datetime
-from uuid import UUID, uuid4
+from uuid import uuid4
 
 import pytest
-from fastapi import FastAPI
-from fastapi.testclient import TestClient
 
-from app.api.dependencies import get_create_user_use_case, get_get_user_use_case
-from app.api.v1 import router as v1_router
-from app.api.v2 import router as v2_router
 from app.application.exceptions import NotFoundError, UserAlreadyExistsError
-from app.application.use_cases import CreateUserCommand, CreateUserUseCase, GetUserUseCase
-from app.core.handlers import register_exception_handlers
-from app.core.middleware import RequestLoggingMiddleware
+from app.application.use_cases import CreateUserCommand, CreateUserUseCase
 from app.domain.entities import User
 from app.infrastructure.database.models import UserModel
-
-
-class FakeHasher:
-    def hash(self, password: str) -> str:
-        return f"hashed:{password}"
-
-
-class MemoryUserRepository:
-    def __init__(self) -> None:
-        self.users: dict[UUID, User] = {}
-
-    async def get_by_id(self, user_id: UUID) -> User | None:
-        return self.users.get(user_id)
-
-    async def get_by_username(self, username: str) -> User | None:
-        return next((u for u in self.users.values() if u.username == username), None)
-
-    async def get_by_email(self, email: str) -> User | None:
-        return next((u for u in self.users.values() if u.email == email), None)
-
-    async def add(self, user: User) -> User:
-        self.users[user.id] = user
-        return user
-
-
-class MemoryUnitOfWork:
-    def __init__(self, repository: MemoryUserRepository) -> None:
-        self.users = repository
-        self.commits = 0
-
-    async def commit(self) -> None:
-        self.commits += 1
+from tests.conftest import (
+    STRONG_PASSWORD,
+    FakeHasher,
+    MemoryAuditRepository,
+    MemoryUnitOfWork,
+    MemoryUserRepository,
+    create_api_client,
+    sample_user,
+)
 
 
 @pytest.mark.asyncio
 async def test_create_user_hashes_password_and_commits() -> None:
     repository = MemoryUserRepository()
     unit_of_work = MemoryUnitOfWork(repository)
-    use_case = CreateUserUseCase(unit_of_work, FakeHasher())
+    use_case = CreateUserUseCase(unit_of_work, FakeHasher(), MemoryAuditRepository())
 
     user = await use_case.execute(
         CreateUserCommand(
             username="test.user",
             email="TEST@EXAMPLE.COM",
-            password="strong-password",
+            password=STRONG_PASSWORD,
         )
     )
 
     assert user.email == "test@example.com"
-    assert user.password_hash == "hashed:strong-password"
+    assert user.password_hash == f"hashed:{STRONG_PASSWORD}"
     assert user.role == "user"
     assert unit_of_work.commits == 1
 
@@ -80,42 +49,43 @@ async def test_create_user_rejects_duplicate_username() -> None:
             CreateUserCommand(
                 username="existing",
                 email="different@example.com",
-                password="strong-password",
+                password=STRONG_PASSWORD,
             )
         )
 
 
-def sample_user(**overrides) -> User:
-    now = datetime.now(UTC)
-    values = {
-        "id": uuid4(),
-        "username": "test.user",
-        "email": "test@example.com",
-        "password_hash": "never-return-this",
-        "first_name": "Test",
-        "last_name": "User",
-        "is_active": True,
-        "is_verified": False,
-        "role": "user",
-        "created_at": now,
-        "updated_at": now,
-    }
-    values.update(overrides)
-    return User(**values)
-
-
-def create_api_client(repository: MemoryUserRepository) -> TestClient:
-    app = FastAPI()
-    app.add_middleware(RequestLoggingMiddleware)
-    register_exception_handlers(app)
-    app.include_router(v1_router)
-    app.include_router(v2_router)
-    uow = MemoryUnitOfWork(repository)
-    app.dependency_overrides[get_create_user_use_case] = lambda: CreateUserUseCase(
-        uow, FakeHasher()
+@pytest.mark.asyncio
+async def test_update_user_persists_changes() -> None:
+    repository = MemoryUserRepository()
+    existing = sample_user(first_name="Before")
+    repository.users[existing.id] = existing
+    updated = User(
+        id=existing.id,
+        username=existing.username,
+        email=existing.email,
+        password_hash=existing.password_hash,
+        first_name="After",
+        last_name=existing.last_name,
+        is_active=existing.is_active,
+        is_verified=True,
+        role=existing.role,
+        created_at=existing.created_at,
+        updated_at=existing.updated_at,
     )
-    app.dependency_overrides[get_get_user_use_case] = lambda: GetUserUseCase(repository)
-    return TestClient(app, raise_server_exceptions=False)
+
+    result = await repository.update(updated)
+
+    assert result.first_name == "After"
+    assert result.is_verified is True
+    assert repository.users[existing.id].first_name == "After"
+
+
+@pytest.mark.asyncio
+async def test_update_unknown_user_raises_not_found() -> None:
+    repository = MemoryUserRepository()
+
+    with pytest.raises(NotFoundError):
+        await repository.update(sample_user())
 
 
 @pytest.mark.parametrize("version", ["v1", "v2"])
@@ -123,13 +93,16 @@ def test_create_and_get_user_api_never_exposes_password_hash(version: str) -> No
     create_path = (
         "/api/v1/users/createUser" if version == "v1" else "/api/v2/users"
     )
+    login_path = (
+        "/api/v1/users/login" if version == "v1" else "/api/v2/users/login"
+    )
     with create_api_client(MemoryUserRepository()) as client:
         created = client.post(
             create_path,
             json={
                 "username": "api.user",
                 "email": "api@example.com",
-                "password": "strong-password",
+                "password": STRONG_PASSWORD,
                 "first_name": "API",
             },
         )
@@ -140,12 +113,19 @@ def test_create_and_get_user_api_never_exposes_password_hash(version: str) -> No
         assert "password" not in created.text
         assert created_body["data"]["role"] == "user"
 
+        login = client.post(
+            login_path,
+            json={"username": "api.user", "password": STRONG_PASSWORD},
+        )
+        assert login.status_code == 200
+        token = login.json()["data"]["access_token"]
+
         get_path = (
             f"/api/v1/users/getUser/{user_id}"
             if version == "v1"
             else f"/api/v2/users/{user_id}"
         )
-        fetched = client.get(get_path)
+        fetched = client.get(get_path, headers={"Authorization": f"Bearer {token}"})
         assert fetched.status_code == 200
         assert fetched.json()["data"]["id"] == user_id
         assert "password" not in fetched.text
@@ -153,15 +133,21 @@ def test_create_and_get_user_api_never_exposes_password_hash(version: str) -> No
 
 @pytest.mark.parametrize("version", ["v1", "v2"])
 def test_get_unknown_user_returns_standard_not_found(version: str) -> None:
+    repository = MemoryUserRepository()
+    user = sample_user(username="auth.user")
+    repository.users[user.id] = user
     user_id = uuid4()
     get_path = (
         f"/api/v1/users/getUser/{user_id}"
         if version == "v1"
         else f"/api/v2/users/{user_id}"
     )
-    with create_api_client(MemoryUserRepository()) as client:
-        response = client.get(get_path)
+    with create_api_client(repository) as client:
+        unauthenticated = client.get(get_path)
+        assert unauthenticated.status_code == 401
 
+        token = f"token-for-{user.id}"
+        response = client.get(get_path, headers={"Authorization": f"Bearer {token}"})
         assert response.status_code == 404
         assert response.json()["error"]["code"] == "NOT_FOUND"
 

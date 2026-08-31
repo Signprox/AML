@@ -7,7 +7,6 @@ from urllib.parse import quote
 from pydantic import Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-
 Environment = Literal["development", "uat", "production"]
 LogLevel = Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
 
@@ -29,6 +28,15 @@ class Settings(BaseSettings):
     db_name: str
     db_user: str
     db_password: SecretStr
+    db_pool_size: int = Field(default=5, ge=1)
+    db_max_overflow: int = Field(default=10, ge=0)
+    db_pool_timeout: int = Field(default=30, ge=1)
+    jwt_secret: SecretStr
+    jwt_algorithm: str = "HS256"
+    jwt_expire_minutes: int = Field(default=60, ge=1)
+    cors_origins: str = ""
+    trusted_hosts: str = ""
+    rate_limit: str = "100/minute"
 
     model_config = SettingsConfigDict(
         env_file_encoding="utf-8",
@@ -63,6 +71,27 @@ class Settings(BaseSettings):
             f"@{host}:{self.db_port}/{database}"
         )
 
+    @property
+    def cors_origin_list(self) -> list[str]:
+        if not self.cors_origins.strip():
+            return []
+        return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
+
+    @property
+    def trusted_host_list(self) -> list[str]:
+        if not self.trusted_hosts.strip():
+            return []
+        return [host.strip() for host in self.trusted_hosts.split(",") if host.strip()]
+
+    def validate_production_secrets(self) -> None:
+        if self.app_env != "production":
+            return
+        weak_secrets = {"change-me", "dev-only-change-in-production", ""}
+        if self.jwt_secret.get_secret_value() in weak_secrets:
+            raise ValueError("JWT_SECRET must be set to a strong value in production")
+        if self.db_password.get_secret_value() in weak_secrets:
+            raise ValueError("DB_PASSWORD must be set to a strong value in production")
+
 
 def _get_active_environment() -> str:
     environment = os.getenv("APP_ENV", "development").strip().lower()
@@ -79,4 +108,3 @@ def get_settings() -> Settings:
     environment = _get_active_environment()
     env_file = ENVIRONMENT_DIR / f".env.{environment}"
     return Settings(_env_file=env_file)
-

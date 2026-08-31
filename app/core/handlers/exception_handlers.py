@@ -14,6 +14,7 @@ from app.application.exceptions import (
     AuthorizationError,
     ConflictError,
     NotFoundError,
+    ValidationError,
 )
 from app.core.config import (
     DEFAULT_HTTP_ERROR_MESSAGE,
@@ -22,7 +23,6 @@ from app.core.config import (
     VALIDATION_ERROR_MESSAGE,
     ApiErrorCode,
 )
-
 
 logger = logging.getLogger("aml.exceptions")
 
@@ -42,6 +42,7 @@ _APPLICATION_STATUS = {
     AuthorizationError: status.HTTP_403_FORBIDDEN,
     NotFoundError: status.HTTP_404_NOT_FOUND,
     ConflictError: status.HTTP_409_CONFLICT,
+    ValidationError: 422,
 }
 
 

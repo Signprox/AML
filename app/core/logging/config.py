@@ -4,7 +4,6 @@ from threading import Lock
 
 from app.core.config import Settings
 
-
 _configuration_lock = Lock()
 _configured_signature: tuple[str, str, str] | None = None
 

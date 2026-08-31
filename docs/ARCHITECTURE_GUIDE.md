@@ -92,38 +92,38 @@ these codes rather than parsing human-readable messages.
 ```text
 app/api/
 |-- dependencies.py                 shared dependency wiring
+|-- handlers/                       shared route handler logic
 |-- helpers/                        shared response builders
-|-- schemas/                        shared response envelope
+|-- schemas/                        shared HTTP and response schemas
 |-- v1/
 |   |-- router.py                   /api/v1 aggregate router
-|   |-- routers/user_router.py
-|   `-- schemas/user_schema.py
+|   `-- routers/user_router.py
 `-- v2/
     |-- router.py                   /api/v2 aggregate router
-    |-- routers/user_router.py
-    `-- schemas/user_schema.py
+    `-- routers/user_router.py
 ```
 
 Both versions currently implement the same behavior:
 
 ```http
 POST /api/v1/users/createUser
+POST /api/v1/users/login
 GET  /api/v1/users/getUser/{user_id}
 POST /api/v2/users
+POST /api/v2/users/login
 GET  /api/v2/users/{user_id}
 ```
 
-Their routers and schemas are separate so v2 can introduce a breaking HTTP
-contract without changing v1. Both versions intentionally share the same use
-cases, domain entities, repositories, and database table.
+v1 and v2 routers are thin wrappers around shared handlers and schemas so each
+HTTP version can evolve independently without duplicating business logic.
 
 ### `CreateUserRequest`
 
-Each version defines its own `CreateUserRequest` Pydantic model. It:
+The shared `CreateUserRequest` in `app/api/schemas/user_schema.py`:
 
 - validates username length and allowed characters;
 - validates and normalizes the email format;
-- requires an 8–128 character password;
+- requires an 8–128 character password with complexity rules;
 - limits optional names to the DDL column lengths; and
 - forbids unexpected fields.
 
@@ -132,9 +132,9 @@ The public request does not accept a role. Public creation always uses the safe
 
 ### `UserResponse`
 
-Each version defines its own `UserResponse`. It contains public user fields and
-deliberately excludes `password_hash`. `from_attributes=True` allows validation
-from a domain `User` object.
+The shared `UserResponse` contains public user fields and deliberately excludes
+`password_hash`. `from_attributes=True` allows validation from a domain `User`
+object.
 
 ### v1 and v2 `user_router`
 
@@ -256,6 +256,7 @@ Declares user persistence operations:
 - `get_by_username()`
 - `get_by_email()`
 - `add()`
+- `update()`
 
 The contract uses domain `User` objects and UUIDs. It does not expose SQLAlchemy
 models or result objects.
@@ -306,6 +307,7 @@ database execution and telemetry.
 | `execute()` | Executes a SQLAlchemy ORM/Core statement | no commit |
 | `execute_raw()` | Converts parameterized SQL text with `text()` and executes it | no commit |
 | `flush()` | Sends pending ORM changes to PostgreSQL | no commit |
+| `update()` | Merges an ORM instance and flushes changes | no commit |
 | `commit()` | Commits the current transaction | commit |
 | `rollback()` | Rolls back the current transaction | rollback |
 | `transaction()` | Async context manager around `session.begin()` | commit on success, rollback on failure |
@@ -338,6 +340,8 @@ This is the PostgreSQL implementation of `UserRepository`.
 - `_to_domain()` maps `UserModel` to the domain `User` entity.
 - `add()` maps the domain entity to `UserModel`, adds it to the session, and
   flushes through `DatabaseHelper`.
+- `update()` loads the existing row, applies domain field changes, and persists
+  them through `DatabaseHelper.update()` without committing.
 - `IntegrityError` from a uniqueness race is translated into the safe application
   exception `UserAlreadyExistsError`.
 - It never commits; the Unit of Work owns that decision.

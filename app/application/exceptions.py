@@ -32,5 +32,9 @@ class ConflictError(ApplicationError):
     code = "CONFLICT"
 
 
+class ValidationError(ApplicationError):
+    code = "VALIDATION_ERROR"
+
+
 class UserAlreadyExistsError(ConflictError):
     code = "USER_ALREADY_EXISTS"

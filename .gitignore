@@ -6,6 +6,9 @@ __pycache__/
 .pytest_cache/
 .coverage
 htmlcov/
+.mypy_cache/
+.ruff_cache/
+.junie/
 
 .env
 .env.*
@@ -15,4 +18,3 @@ htmlcov/
 
 .idea/
 .vscode/
-/environment

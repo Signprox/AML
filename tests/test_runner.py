@@ -17,13 +17,16 @@ def test_runner_selects_environment_and_starts_uvicorn(
     run.main([environment])
 
     assert os.environ["APP_ENV"] == environment
+    expected_host = "127.0.0.1" if environment == "development" else "0.0.0.0"
+    expected_reload = environment == "development"
     assert calls == [
         (
             ("app.main:app",),
             {
-                "host": "127.0.0.1",
+                "host": expected_host,
                 "port": 8000,
-                "reload": True,
+                "reload": expected_reload,
+                "workers": 1,
             },
         )
     ]

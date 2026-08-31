@@ -1,0 +1,32 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: aml_dev
+      POSTGRES_USER: aml_user
+      POSTGRES_PASSWORD: change-me
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U aml_user -d aml_dev"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      APP_ENV: development
+    env_file:
+      - environment/.env.development
+    depends_on:
+      db:
+        condition: service_healthy
+    command: ["python", "run.py", "development", "--no-reload", "--host", "0.0.0.0"]
+
+volumes:
+  postgres_data:
