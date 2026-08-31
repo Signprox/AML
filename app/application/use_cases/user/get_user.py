@@ -3,6 +3,7 @@ from uuid import UUID
 from app.application.exceptions import NotFoundError
 from app.application.interfaces import AuditRepository, UserRepository
 from app.domain.entities import User
+from app.infrastructure.repositories.sql_audit_repository import record_audit
 
 
 class GetUserUseCase:
@@ -20,8 +21,6 @@ class GetUserUseCase:
             raise NotFoundError("User not found")
 
         if self._audit_repository is not None:
-            from app.infrastructure.repositories.sql_audit_repository import record_audit
-
             await record_audit(
                 self._audit_repository,
                 action="user.read",

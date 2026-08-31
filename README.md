@@ -53,7 +53,7 @@ Location: `app/application/`
 
 Coordinates business workflows without knowing how HTTP, databases, or third-party services work.
 
-- `use_cases/`: actions such as creating a system user or monitoring a transaction
+- `use_cases/`: application workflows grouped by entity (for example `user/`)
 - `interfaces/`: repository and external-service contracts required by use cases
 
 ### Infrastructure layer
@@ -105,7 +105,8 @@ AML/
 |   |   `-- dependencies.py          # Dependency injection
 |   |-- application/
 |   |   |-- interfaces/              # Abstract repositories and gateways
-|   |   `-- use_cases/               # Application workflow orchestration
+|   |   `-- use_cases/               # Workflows grouped by entity
+|   |       `-- user/                # User create, get, login, authenticate
 |   |-- core/
 |   |   |-- config/
 |   |   |-- logging/
@@ -378,8 +379,11 @@ app/
 |   |-- interfaces/
 |   |   `-- user_repository.py
 |   `-- use_cases/
-|       |-- create_user_use_case.py
-|       `-- deactivate_user_use_case.py
+|       `-- user/
+|           |-- create_user.py
+|           |-- get_user.py
+|           |-- login.py
+|           `-- authenticate_user.py
 |-- domain/
 |   `-- entities/
 |       `-- user.py

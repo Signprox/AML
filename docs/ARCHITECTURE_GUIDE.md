@@ -207,7 +207,7 @@ and domain-compatible values, and copy the request ID into the response header.
 
 ## 7. Application classes
 
-### `CreateUserCommand` — `app/application/use_cases/create_user.py`
+### `CreateUserCommand` — `app/application/use_cases/user/create_user.py`
 
 This immutable dataclass is the application-layer input for user creation. It is
 not an HTTP schema, so the use case can also be called by a job, CLI, or another
@@ -510,7 +510,7 @@ For a new resource such as an AML case:
 
 1. add a pure domain entity under `app/domain/entities/`;
 2. define repository/Unit of Work protocols under `app/application/interfaces/`;
-3. add focused use cases under `app/application/use_cases/`;
+3. add focused use cases under `app/application/use_cases/<entity>/`;
 4. add the SQLAlchemy model under `app/infrastructure/database/models/`;
 5. implement the repository under `app/infrastructure/repositories/` using
    `DatabaseHelper`;

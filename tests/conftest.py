@@ -16,8 +16,12 @@ from app.api.dependencies import (
 from app.api.v1 import router as v1_router
 from app.api.v2 import router as v2_router
 from app.application.exceptions import NotFoundError
-from app.application.use_cases import CreateUserUseCase, GetUserUseCase, LoginUseCase
-from app.application.use_cases.authenticate_user import AuthenticateUserUseCase
+from app.application.use_cases.user import (
+    AuthenticateUserUseCase,
+    CreateUserUseCase,
+    GetUserUseCase,
+    LoginUseCase,
+)
 from app.core.handlers import register_exception_handlers
 from app.core.middleware import RequestLoggingMiddleware
 from app.domain.entities import User

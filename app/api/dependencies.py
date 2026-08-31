@@ -8,8 +8,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.exceptions import AuthenticationError, AuthorizationError
 from app.application.interfaces import PasswordHasher
-from app.application.use_cases import CreateUserUseCase, GetUserUseCase, LoginUseCase
-from app.application.use_cases.authenticate_user import AuthenticateUserUseCase
+from app.application.use_cases.user import (
+    AuthenticateUserUseCase,
+    CreateUserUseCase,
+    GetUserUseCase,
+    LoginUseCase,
+)
 from app.core.config import Settings, get_settings
 from app.domain.entities import User
 from app.infrastructure.database import get_session
